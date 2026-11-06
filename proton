@@ -6,6 +6,7 @@ import fcntl
 import array
 import fnmatch
 import filecmp
+import hashlib
 import os
 import shutil
 import errno
@@ -18,6 +19,7 @@ import shlex
 import uuid
 import json
 import time
+import urllib.request
 
 from ctypes import CDLL
 from ctypes import CFUNCTYPE
@@ -1634,6 +1636,8 @@ fex_application_profiles = {
 
 ZLUDA_TITLES = {'17410', '208650', '35140', '50130', '49520', '65930'}
 PE32_TITLES = {'17410', '35140', '50130', '49520', '65930'}
+PHYSX_URL = 'https://us.download.nvidia.com/Windows/9.23.1019/PhysX_9.23.1019_SystemSoftware.exe'
+PHYSX_SHA256 = '9b42b84e881769d681e09f62a1b51532616b2e6a2d5d99d0ccae6eb5fbbc208c'
 
 
 def game_setting():
@@ -1671,6 +1675,45 @@ def early_title_policy(env, verb):
         env['DXVK_ENABLE_NVAPI'] = '1'
     if appid == '49520':
         env['PROTON_NO_ESYNC'] = '1'
+
+
+def ensure_physx(env):
+    try:
+        helper_env = dict(env, LD_PRELOAD='')
+        select_root(helper_env, g_proton.base_dir, bootstrap=True, ld_path_var=ld_path_var)
+        query = subprocess.run([g_proton.wine_bin, r'C:\windows\syswow64\reg.exe', 'query',
+                                r'HKLM\Software\AGEIA Technologies', '/v', 'PhysX Version', '/reg:32'],
+                               env=helper_env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                               text=True, timeout=30)
+        version = query.stdout.partition('REG_DWORD')[2].split()
+        if version and int(version[0], 16) >= 9140702:
+            return
+        cache = (Path(env.get('XDG_CACHE_HOME') or Path.home() / '.cache') / 'proton-zluda/physx').resolve()
+        cache.mkdir(parents=True, exist_ok=True)
+        installer = cache / PHYSX_URL.rsplit('/', 1)[-1]
+        with FileLock(str(cache / '.lock'), timeout=0):
+            if not installer.exists():
+                with urllib.request.urlopen(PHYSX_URL, timeout=30) as response:
+                    data = response.read()
+                if hashlib.sha256(data).hexdigest() != PHYSX_SHA256:
+                    raise ValueError('downloaded PhysX installer SHA-256 mismatch')
+                temporary = installer.with_suffix('.tmp')
+                with temporary.open('wb') as output:
+                    output.write(data)
+                    output.flush()
+                    os.fsync(output.fileno())
+                temporary.replace(installer)
+            if hashlib.sha256(installer.read_bytes()).hexdigest() != PHYSX_SHA256:
+                installer.unlink()
+                raise ValueError('cached PhysX installer SHA-256 mismatch')
+            try:
+                subprocess.run([g_proton.wine_bin, str(installer), '/s'], env=helper_env, cwd=cache,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=180)
+            finally:
+                subprocess.run([g_proton.wineserver_bin, '-w'], env=helper_env, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL, check=True, timeout=180)
+    except Exception as error:
+        log('PhysX setup failed; continuing launch with CPU PhysX: ' + str(error))
 
 
 def configure_device(env):
@@ -1916,6 +1959,11 @@ class Session:
         if argv[1] not in ('run', 'waitforexitandrun'):
             return
         appid = self.env.get('SteamAppId', self.env.get('SteamGameId', ''))
+        # These titles' Steam or bundled PhysX ships only native GPU machine code (no PTX).
+        # ZLUDA needs PTX-capable PhysX System Software.
+        if (self.env.get('PROTON_ENABLE_ZLUDA') == '1' and appid in {'17410', '35140', '49520'}
+                and Path(argv[2].replace('\\', '/')).name.lower() != 'iscriptevaluator.exe'):
+            ensure_physx(self.env)
         if appid == '17410':
             binaries = Path(self.env['STEAM_COMPAT_INSTALL_PATH']) / 'Binaries'
             system_core = Path(g_compatdata.prefix_dir) / (
