@@ -28,7 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ZLUDA additions, build instructions and component patches are available at
 
-    https://github.com/chkuendig/proton-ge-custom
+    https://github.com/chkuendig/Proton
 
 The exact Proton and component commit URLs for this build are appended below.
 The Proton commit's patches/ directory contains our Wine and dxvk-nvapi changes;

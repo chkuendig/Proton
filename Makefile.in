@@ -1393,7 +1393,7 @@ zluda-license-force:
 $(DIST_LICENSE): $(LICENSE) zluda-license-force
 	cp -a $< $@
 	printf '\nCorresponding source commits for this ZLUDA build:\n' >> $@
-	printf 'https://github.com/chkuendig/proton-ge-custom/tree/%s (including patches/)\n' "$$(git -C "$(SRC)" rev-parse HEAD)" >> $@
+	printf 'https://github.com/chkuendig/Proton/tree/%s (including patches/)\n' "$$(git -C "$(SRC)" rev-parse HEAD)" >> $@
 	printf 'https://github.com/chkuendig/ZLUDA/tree/%s\n' "$$(git -C "$(SRC)/zluda" rev-parse HEAD)" >> $@
 	printf 'https://github.com/chkuendig/zluda-wine/tree/%s\n' "$$(git -C "$(SRC)/zluda-wine" rev-parse HEAD)" >> $@
 	printf 'https://github.com/chkuendig/llvm-project/tree/%s\n' "$$(git -C "$(SRC)/zluda/ext/llvm-project" rev-parse HEAD)" >> $@
