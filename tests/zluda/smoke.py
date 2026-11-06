@@ -2,6 +2,7 @@
 """Check the assembled tool and run both PE widths against a CPU fixture."""
 import os
 from pathlib import Path
+import runpy
 import shutil
 import subprocess
 import sys
@@ -69,4 +70,32 @@ with tempfile.TemporaryDirectory(prefix='zluda-smoke-', dir=obj) as temporary:
                 subprocess.run([str(tool / 'files/bin/wineserver'), '-w'], env=active, check=True, timeout=30)
         finally:
             subprocess.run([str(tool / 'files/bin/wineserver'), '-k'], env=base, timeout=30)
-print('PASS: complete tool, ELF closure, stock stubs, PE64 and WoW64 off/on/off')
+    prefix = root / 'helpers'
+    shutil.copytree(tool / 'files/share/default_pfx', prefix, symlinks=False)
+    drives = prefix / 'dosdevices'
+    drives.mkdir(exist_ok=True)
+    (drives / 'c:').symlink_to('../drive_c')
+    (drives / 'z:').symlink_to('/')
+    helpers = dict(env, PATH=str(tool / 'files/bin') + ':' + env['PATH'],
+                   WINE=str(tool / 'files/bin/wine'), WINESERVER=str(tool / 'files/bin/wineserver'),
+                   WINEPREFIX=str(prefix), WINEARCH='wow64', PROTON_ENABLE_ZLUDA='0',
+                   WINEDLLOVERRIDES='nvcuda=', WINETRICKS_LATEST_VERSION_CHECK='disabled',
+                   XDG_CACHE_HOME=str(root / 'cache'))
+    sys.path.insert(0, str(tool))
+    policy = runpy.run_path(str(tool / 'proton'))
+    policy['select_root'](helpers, tool, bootstrap=True)
+    assert 'ZLUDA_WINE_BACKEND_PATH' not in helpers
+    assert shutil.which('cabextract', path=helpers['PATH']) == str(tool / 'files/bin/cabextract')
+    subprocess.run(['cabextract', '--version'], env=helpers, check=True)
+    verbs = ['d3dx9', 'd3dcompiler_43', 'd3dx11_43']
+    try:
+        subprocess.run(['bash', str(tool / 'files/bin/winetricks'), '--unattended', *verbs], env=helpers, check=True, timeout=600)
+        assert set(verbs) <= set((prefix / 'winetricks.log').read_text().splitlines())
+        for directory in checks.ARCHES:
+            for name in ['d3dx9_43.dll', 'd3dcompiler_43.dll', 'd3dx11_43.dll']:
+                path = prefix / 'drive_c/windows' / directory / name
+                assert path.is_file() and not policy['file_is_wine_builtin_dll'](str(path)), path
+        checks.validate_default_prefix(tool, prefix)
+    finally:
+        subprocess.run([helpers['WINESERVER'], '-k'], env=helpers, timeout=30)
+print('PASS: complete tool, ELF closure, PE64/WoW64 off/on/off and fresh DirectX helpers')

@@ -34,6 +34,17 @@ $(OBJ)/.zluda-dist: $(OBJ)/.zluda-build
 	python3 "$(SRC)/make/zluda.py" native "$(ZLUDA_DEPS)" "$(ZLUDA_BUILD)" "$(DST_BASE)" "$(ZLUDA_ORIGIN)"
 	touch $@
 
+$(OBJ)/.cabextract-dist: $(OBJ)/.zluda-deps $(SRC)/make/rules-zluda.mk
+	tar -xf "$(ZLUDA_DEPS)/downloads/cabextract-1.11.tar.gz" -C "$(OBJ)"
+	cd "$(OBJ)/cabextract-1.11" && CFLAGS="$(CFLAGS)" ./configure --prefix=/usr --with-external-libmspack=no
+	$(MAKE) -C "$(OBJ)/cabextract-1.11" check
+	install -Dm755 "$(OBJ)/cabextract-1.11/cabextract" "$(DST_DIR)/bin/cabextract"
+	strip --strip-debug "$(DST_DIR)/bin/cabextract"
+	mkdir -p "$(DST_BASE)/licenses/cabextract"
+	install -m644 "$(OBJ)/cabextract-1.11/"{COPYING,AUTHORS,README} "$(DST_BASE)/licenses/cabextract/"
+	install -m644 /usr/share/common-licenses/LGPL-2.1 "$(DST_BASE)/licenses/cabextract/COPYING.LIB"
+	touch $@
+
 $(OBJ)/.zluda-wine-build: $(OBJ)/.zluda-wine-post-source $(OBJ)/.zluda-deps $(OBJ)/.wine-x86_64-build
 $(OBJ)/.zluda-wine-build: $(SRC)/make/zluda-wine-sdk.py $(SRC)/make/zluda-wine-abi.json
 	python3 "$(SRC)/make/zluda-wine-sdk.py" "$(WINE_SRC)" "$(WINE_x86_64_OBJ)" "$(ZLUDA_WINE_SDK)"
@@ -56,8 +67,10 @@ $(OBJ)/.zluda-wine-dist: $(SRC)/make/zluda.py $(SRC)/proton
 zluda: $(OBJ)/.zluda-dist
 zluda-wine: $(OBJ)/.zluda-wine-dist
 zluda-deps: $(OBJ)/.zluda-deps
+cabextract: $(OBJ)/.cabextract-dist
+all-dist: cabextract
 all all-dist default_pfx: zluda zluda-wine
-.PHONY: zluda zluda-wine zluda-deps zluda-smoke zluda-launcher-smoke
+.PHONY: zluda zluda-wine zluda-deps cabextract zluda-smoke zluda-launcher-smoke
 
 zluda-smoke:
 	PYTHONDONTWRITEBYTECODE=1 python3 "$(SRC)/tests/zluda/smoke.py" "$(abspath $(REDIST_DIR))" "$(OBJ)"

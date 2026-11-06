@@ -57,6 +57,11 @@
       ]
     },
     {
+      "id": "cabextract",
+      "url": "https://www.cabextract.org.uk/cabextract-1.11.tar.gz",
+      "sha256": "b5546db1155e4c718ff3d4b278573604f30dd64c3c5bfd4657cd089b823a3ac6"
+    },
+    {
       "id": "numactl",
       "url": "https://github.com/numactl/numactl/releases/download/v2.0.18/numactl-2.0.18.tar.gz",
       "sha256": "b4fc0956317680579992d7815bc43d0538960dc73aa1dd8ca7e3806e30bc1274",

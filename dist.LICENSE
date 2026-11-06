@@ -41,6 +41,11 @@ Our pinned component repositories are
     https://github.com/chkuendig/zluda-wine
     https://github.com/chkuendig/llvm-project
 
+cabextract 1.11 and its bundled mspack decompressor are built from the pinned
+source archive recorded in licenses/zluda/dependencies.json. cabextract is
+licensed under GPL-2.0-or-later, with LGPL-2.1 mspack code; source and notices are at
+https://www.cabextract.org.uk/ and under licenses/cabextract/ in this build.
+
 Browse Valve's upstream source code for more information
 
     https://github.com/ValveSoftware/Proton
