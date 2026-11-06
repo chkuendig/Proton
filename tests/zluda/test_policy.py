@@ -152,6 +152,33 @@ class Policy(unittest.TestCase):
         policy.early_title_policy(env, 'runinprefix')
         self.assertNotIn('PROTON_USE_WOW64', env)
 
+    def test_bureau_installs_directx_and_keeps_bundled_physx(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            game, prefix = root / 'game', root / 'prefix'
+            binaries = game / 'Binaries/Win32'
+            binaries.mkdir(parents=True)
+            prefix.mkdir()
+            for name in ('PhysXCore.dll', 'PhysXDevice.dll'):
+                (binaries / name).write_bytes(b'bundled Epic PhysX')
+            before = {p.name: p.read_bytes() for p in binaries.iterdir()}
+            session = SimpleNamespace(env={'SteamAppId': '65930', 'STEAM_COMPAT_INSTALL_PATH': str(game),
+                                           'PROTON_ENABLE_ZLUDA': '1', 'ZLUDA_WINE_BACKEND_PATH': 'inherited'})
+            tool = SimpleNamespace(base_dir=str(root / 'tool'), wine_bin='wine', wineserver_bin='wineserver')
+            compat = SimpleNamespace(prefix_dir=str(prefix), prefix_lock=mock.MagicMock())
+            argv = ['proton', 'run', str(binaries / 'TheBureau.exe')]
+            with mock.patch.object(policy, 'g_proton', tool, create=True), \
+                 mock.patch.object(policy, 'g_compatdata', compat, create=True), \
+                 mock.patch.object(policy.subprocess, 'run') as run:
+                policy.Session.prepare_zluda_title(session, argv)
+            helpers = [c for c in run.call_args_list if c.args[0][0] == 'bash']
+            self.assertEqual([c.args[0][-1] for c in helpers], ['d3dx9', 'd3dcompiler_43', 'd3dx11_43'])
+            for call in helpers:
+                self.assertNotIn('ZLUDA_WINE_BACKEND_PATH', call.kwargs['env'])
+                self.assertEqual(call.kwargs['env']['WINEDLLPATH'].split(':')[0], str(root / 'tool/files/lib/wine-cuda/stub'))
+            self.assertEqual({p.name: p.read_bytes() for p in binaries.iterdir()}, before)
+            self.assertEqual(argv[2:], [str(binaries / 'TheBureau.exe')])
+
     def test_deck_detection_fails_closed_and_preserves_override(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

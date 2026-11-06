@@ -1638,8 +1638,9 @@ TITLE_DEPENDENCIES = {
     '35140': ('d3dx9', 'd3dcompiler_43', 'physx'),
     '50130': ('d3dx9',),
     '49520': ('physx',),
+    '65930': ('d3dx9', 'd3dcompiler_43', 'd3dx11_43'),
 }
-PE32_TITLES = {'17410', '35140', '50130', '49520'}
+PE32_TITLES = {'17410', '35140', '50130', '49520', '65930'}
 
 
 def game_setting():
