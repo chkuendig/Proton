@@ -1918,8 +1918,15 @@ class Session:
         appid = self.env.get('SteamAppId', self.env.get('SteamGameId', ''))
         if appid == '17410':
             binaries = Path(self.env['STEAM_COMPAT_INSTALL_PATH']) / 'Binaries'
+            system_core = Path(g_compatdata.prefix_dir) / (
+                'drive_c/Program Files (x86)/NVIDIA Corporation/PhysX/Engine/v2.8.0/PhysXCore.dll')
             for name in ('PhysXCore.dll', 'PhysXDevice.dll', 'PhysXLocal'):
                 bundled, moved = binaries / name, binaries / (name + '.bak')
+                if not system_core.is_file():
+                    if moved.exists() and not bundled.exists():
+                        moved.rename(bundled)
+                        log('Restored bundled ' + name + ' without a system PhysX core')
+                    continue
                 if not bundled.exists():
                     continue
                 if moved.is_dir():

@@ -152,6 +152,53 @@ class Policy(unittest.TestCase):
         policy.early_title_policy(env, 'runinprefix')
         self.assertNotIn('PROTON_USE_WOW64', env)
 
+    def test_mirror_moves_only_with_system_core_and_restores_backups(self):
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(policy, 'log'):
+            root = Path(temporary)
+            game, prefix = root / 'game', root / 'prefix'
+            binaries = game / 'Binaries'
+            (binaries / 'PhysXLocal').mkdir(parents=True)
+            files = {name: name.encode() for name in
+                     ('PhysXCore.dll', 'PhysXDevice.dll', 'PhysXLocal/PhysXLoader.dll')}
+            for name, data in files.items():
+                (binaries / name).write_bytes(data)
+            core = prefix / 'drive_c/Program Files (x86)/NVIDIA Corporation/PhysX/Engine/v2.8.0/PhysXCore.dll'
+            session = SimpleNamespace(env={'SteamAppId': '17410', 'STEAM_COMPAT_INSTALL_PATH': str(game)})
+            compat = SimpleNamespace(prefix_dir=str(prefix))
+            argv = ['proton', 'run', str(binaries / 'MirrorsEdge.exe')]
+            with mock.patch.object(policy, 'g_compatdata', compat, create=True), \
+                 mock.patch.object(policy.subprocess, 'run', side_effect=AssertionError('installer invoked')):
+                policy.Session.prepare_zluda_title(session, argv)
+                self.assertEqual({name: (binaries / name).read_bytes() for name in files}, files)
+                core.parent.mkdir(parents=True)
+                core.write_bytes(b'system PhysX core')
+                for enabled in ('1', '0'):
+                    session.env['PROTON_ENABLE_ZLUDA'] = enabled
+                    policy.Session.prepare_zluda_title(session, argv)
+                    for name, data in files.items():
+                        parts = Path(name).parts
+                        backup = binaries / (parts[0] + '.bak')
+                        self.assertFalse((binaries / parts[0]).exists())
+                        self.assertEqual(backup.joinpath(*parts[1:]).read_bytes(), data)
+                core.unlink()
+                for enabled in ('1', '0'):
+                    session.env['PROTON_ENABLE_ZLUDA'] = enabled
+                    policy.Session.prepare_zluda_title(session, argv)
+                    self.assertEqual({name: (binaries / name).read_bytes() for name in files}, files)
+                    self.assertFalse(list(binaries.glob('*.bak')))
+
+    def test_bl2_keeps_launcher_swap_no_splash_and_no_esync(self):
+        env = {'SteamAppId': '49520', 'PROTON_ENABLE_ZLUDA': '1'}
+        with mock.patch.object(policy, 'game_setting', return_value='1'), \
+             mock.patch.object(policy.subprocess, 'run', side_effect=AssertionError('installer invoked')):
+            policy.early_title_policy(env, 'run')
+            argv = ['proton', 'run', 'Z:/game/Launcher.exe']
+            for _ in range(2):
+                policy.Session.prepare_zluda_title(SimpleNamespace(env=env), argv)
+            self.assertEqual(argv, ['proton', 'run', 'Z:/game/Borderlands2.exe', '-NoSplash'])
+            self.assertEqual(env['PROTON_NO_ESYNC'], '1')
+            self.assertEqual(env['PROTON_USE_WOW64'], '1')
+
     def test_deck_detection_fails_closed_and_preserves_override(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
