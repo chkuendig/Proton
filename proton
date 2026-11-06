@@ -1632,13 +1632,7 @@ fex_application_profiles = {
     }
 }
 
-TITLE_DEPENDENCIES = {
-    '17410': ('d3dx9', 'd3dcompiler_43', 'physx'),
-    '208650': ('physx',),
-    '35140': ('d3dx9', 'd3dcompiler_43', 'physx'),
-    '50130': ('d3dx9',),
-    '49520': ('physx',),
-}
+ZLUDA_TITLES = {'17410', '208650', '35140', '50130', '49520'}
 PE32_TITLES = {'17410', '35140', '50130', '49520'}
 
 
@@ -1667,7 +1661,7 @@ def early_title_policy(env, verb):
     if verb not in ('run', 'waitforexitandrun'):
         return
     appid = env.get('SteamAppId', env.get('SteamGameId', ''))
-    if appid in TITLE_DEPENDENCIES:
+    if appid in ZLUDA_TITLES:
         env.setdefault('PROTON_ENABLE_ZLUDA', game_setting())
         if env.get("PROTON_ENABLE_ZLUDA") == "1" and appid in PE32_TITLES:
             env['PROTON_USE_WOW64'] = '1'
@@ -1918,28 +1912,10 @@ class Session:
         return app_config
 
     def prepare_zluda_title(self, argv):
-        """Run local prerequisites with stock CUDA stubs after prefix setup."""
+        """Apply the game's bundled-library and launcher fixes."""
         if argv[1] not in ('run', 'waitforexitandrun'):
             return
         appid = self.env.get('SteamAppId', self.env.get('SteamGameId', ''))
-        verbs = TITLE_DEPENDENCIES.get(appid, ())
-        if not verbs:
-            return
-        env = dict(self.env)
-        select_root(env, g_proton.base_dir, bootstrap=True, ld_path_var=ld_path_var)
-        env.update(WINEPREFIX=g_compatdata.prefix_dir, WINE=g_proton.wine_bin,
-                   WINELOADER=g_proton.wine_bin, WINESERVER=g_proton.wineserver_bin,
-                   WINETRICKS_LATEST_VERSION_CHECK='disabled', LD_PRELOAD='')
-        installed = Path(g_compatdata.prefix_dir) / 'winetricks.log'
-        with g_compatdata.prefix_lock:
-            for dependency in verbs:
-                if installed.is_file() and dependency in installed.read_text().splitlines():
-                    continue
-                subprocess.run([g_proton.wineserver_bin, '-w'], env=env, check=True)
-                script = str(Path(g_proton.base_dir) / 'files/bin/winetricks')
-                subprocess.run(['bash', script, '--unattended', dependency], env=env, check=True)
-                subprocess.run([g_proton.wineserver_bin, '-w'], env=env, check=True)
-                argv[1] = 'waitforexitandrun'
         if appid == '17410':
             binaries = Path(self.env['STEAM_COMPAT_INSTALL_PATH']) / 'Binaries'
             for name in ('PhysXCore.dll', 'PhysXDevice.dll', 'PhysXLocal'):

@@ -134,7 +134,7 @@ class Policy(unittest.TestCase):
                     device.mkdir()
                     (device / 'class').write_text(hex(cls))
                     (device / 'vendor').write_text(hex(vendor))
-                for app in policy.TITLE_DEPENDENCIES:
+                for app in policy.ZLUDA_TITLES:
                     for explicit in (None, '0', '1'):
                         for setting in (None, '0', 1):
                             env = {'SteamAppId': app}

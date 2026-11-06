@@ -10,6 +10,7 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 tool, obj = [Path(arg).resolve() for arg in sys.argv[1:]]
 assert not (tool / 'proton_zluda.py').exists()
+assert not (tool / 'files/bin/winetricks').exists()
 sys.path.insert(0, str(HERE.parents[1] / "make"))
 import zluda as checks
 

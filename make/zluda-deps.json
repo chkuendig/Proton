@@ -76,11 +76,6 @@
       "id": "rust-std-i686-pc-windows-gnu",
       "url": "https://static.rust-lang.org/dist/rust-std-1.99.0-i686-pc-windows-gnu.tar.xz",
       "sha256": "8c3f4dd0743b8f092651fac16d00a64c6f06ea9420355099e0f52954cc1a61c2"
-    },
-    {
-      "id": "winetricks",
-      "url": "https://raw.githubusercontent.com/Winetricks/winetricks/f3890f670867b5ffbc3938726db45c0f7d16c8ba/src/winetricks",
-      "sha256": "672a1ff4442e8691a3ffc0e6860137e201a1d1227e9b3044245f1731e9e9837e"
     }
   ],
   "runtime": {
