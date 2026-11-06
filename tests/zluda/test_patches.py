@@ -12,12 +12,14 @@ with tempfile.TemporaryDirectory() as temporary:
         path.mkdir(parents=True)
     (origin / 'value').write_text('before\n')
     (patches / 'one.patch').write_text('--- a/value\n+++ b/value\n@@ -1 +1 @@\n-before\n+after\n')
+    (patches / 'two.patch').write_text('--- /dev/null\n+++ b/created\n@@ -0,0 +1 @@\n+added\n')
     makefile = root / 'Makefile'
     makefile.write_text(f'SRC := {root}\nOBJ := {obj}\ninclude {repo}/make/utility.mk\ninclude {repo}/make/rules-source.mk\n$(eval $(call rules-source,demo,{origin}))\n')
     def run():
         subprocess.run(['make', '-s', '-f', str(makefile), 'demo-source'], check=True)
     run()
     assert (obj / 'src-demo/value').read_text() == 'after\n'
+    assert (obj / 'src-demo/created').read_text() == 'added\n'
     stamp = obj / '.demo-source'
     first = stamp.stat().st_mtime_ns
     cache = obj / 'src-demo/__pycache__'
@@ -33,4 +35,5 @@ with tempfile.TemporaryDirectory() as temporary:
     (patches / 'one.patch').write_text('--- a/value\n+++ b/value\n@@ -1 +1 @@\n-before\n+updated\n')
     run()
     assert (obj / 'src-demo/value').read_text() == 'updated\n'
+    assert (obj / 'src-demo/created').read_text() == 'added\n'
 print('PASS: source patch application and incremental rebuilds')

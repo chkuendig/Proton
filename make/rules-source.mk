@@ -24,7 +24,7 @@ $(1)-rebuild:
 .PHONY: $(1)-rebuild
 
 $$(OBJ)/.$(1)-source: SHELL := $$(SHELL)
-$$(OBJ)/.$(1)-source: $$($(2)_PATCHES) $$(addprefix $$($(2)_ORIGIN)/,$$($(2)_PATCHED_FILES))
+$$(OBJ)/.$(1)-source: $$($(2)_PATCHES) $$(wildcard $$(addprefix $$($(2)_ORIGIN)/,$$($(2)_PATCHED_FILES)))
 $$(OBJ)/.$(1)-source: $$(if $$(NO_MAKEFILE_DEPENDENCY),,$$(MAKEFILE_LIST))
 $$(OBJ)/.$(1)-source: $$(shell echo -n 'syncing $(1)... ' >&2 && \
                               rsync --dry-run $$(addprefix --exclude=,$$($(2)_PATCHED_FILES)) --filter=:C --exclude '*~' --exclude .git --exclude __pycache__ --exclude '*.pyc' --exclude compile_commands.json $$($(2)_SOURCE_ARGS) --info=name -Oarx --delete "$$(abspath $(3))/" "$$($(2)_SRC)" | \
