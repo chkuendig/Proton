@@ -75,6 +75,17 @@ jobs:
               make "${args[@]}" redist
               xvfb-run -a make "${args[@]}" zluda-smoke
             ' bash "$GITHUB_WORKSPACE" 2>&1 | tee /work/build.log
+      - name: Run bridge native unit tests
+        run: |
+          set -euo pipefail
+          docker run --rm --memory=6g --cpus=3 \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -v /work:/work -w /work/build \
+            -e CARGO_HOME "$SDK" bash -euo pipefail -c '
+              env PATH="/work/build/zluda-deps/rust/bin:$PATH" \
+                ZLUDA_WINE_BACKEND_SOURCE="$1/zluda" ZLUDA_WINE_DECLARATIONS_ONLY=1 \
+                CARGO_TARGET_DIR=/work/build/bridge-native-tests \
+                cargo test --locked --offline -j3 --lib --manifest-path "$1/zluda-wine/wine/zluda_wine/Cargo.toml" -- --test-threads=1
+            ' bash "$GITHUB_WORKSPACE" 2>&1 | tee /work/bridge-native-tests.log
       - name: Smoke installed Proton Session and launcher
         run: |
           set -euo pipefail
@@ -109,6 +120,7 @@ jobs:
           path: |
             /work/build.log
             /work/launcher-smoke.log
+            /work/bridge-native-tests.log
             /work/build/launcher-smoke.json
             /work/build/obj-zluda-wine/artifacts/SHA256SUMS
           retention-days: 14
