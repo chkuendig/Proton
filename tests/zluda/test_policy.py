@@ -22,6 +22,23 @@ import zluda as checks
 
 
 class Policy(unittest.TestCase):
+    def test_jc2_uses_the_automatic_pe32_cuda_policy(self):
+        self.assertIn('8190', policy.ZLUDA_TITLES)
+        self.assertIn('8190', policy.PE32_TITLES)
+
+    def test_city_and_origins_get_pe32_cuda_and_physx_without_a_launcher_swap(self):
+        with mock.patch.object(policy, 'game_setting', return_value='1'), \
+             mock.patch.object(policy, 'ensure_physx') as setup:
+            for appid in ('200260', '209000'):
+                env = {'SteamAppId': appid}
+                policy.early_title_policy(env, 'run')
+                self.assertEqual(env['PROTON_ENABLE_ZLUDA'], '1')
+                self.assertEqual(env['PROTON_USE_WOW64'], '1')
+                argv = ['proton', 'run', 'Z:/game/BmLauncher.exe']
+                policy.Session.prepare_zluda_title(SimpleNamespace(env=env), argv)
+                self.assertEqual(argv, ['proton', 'run', 'Z:/game/BmLauncher.exe'])
+            self.assertEqual(setup.call_count, 2)
+
     def test_prefix_copies_detach_links_without_changing_the_supplier(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -274,7 +291,7 @@ class PhysX(unittest.TestCase):
             self.addCleanup(patcher.stop)
 
     def test_absent_runtime_installs_from_one_verified_shared_cache(self):
-        for appid in ('17410', '35140', '49520'):
+        for appid in ('17410', '35140', '49520', '200260', '209000'):
             self.env['SteamAppId'] = appid
             self.env['WINEPREFIX'] = str(self.root / appid)
             policy.ensure_physx(self.env)
@@ -288,8 +305,8 @@ class PhysX(unittest.TestCase):
             self.assertEqual(helper['WINEDLLOVERRIDES'], self.env['WINEDLLOVERRIDES'])
             self.assertTrue(helper['WINEDLLPATH'].endswith('/wine-cuda/stub'))
             self.assertEqual(self.waiter.call_args.kwargs['env'], helper)
-        self.assertEqual(self.installer.call_count, 3)
-        self.assertEqual(self.waiter.call_count, 3)
+        self.assertEqual(self.installer.call_count, 5)
+        self.assertEqual(self.waiter.call_count, 5)
         self.download.assert_called_once_with(policy.PHYSX_URL, timeout=30)
         self.assertEqual(self.env['PROTON_ENABLE_ZLUDA'], '1')
         self.log.assert_not_called()
@@ -380,7 +397,7 @@ class PhysX(unittest.TestCase):
         self.assertIn('continuing launch', self.log.call_args.args[0])
         self.assertIn('wineserver', self.log.call_args.args[0])
 
-    def test_only_the_three_enabled_game_policies_request_setup(self):
+    def test_only_the_five_enabled_game_policies_request_setup(self):
         with mock.patch.object(policy, 'ensure_physx') as setup:
             for appid in policy.ZLUDA_TITLES | {'other'}:
                 for enabled in ('0', '1'):
@@ -389,11 +406,11 @@ class PhysX(unittest.TestCase):
                         self.env.update(SteamAppId=appid, PROTON_ENABLE_ZLUDA=enabled)
                         policy.Session.prepare_zluda_title(SimpleNamespace(env=self.env), ['proton', verb, 'game.exe'])
                         self.assertEqual(setup.call_count, int(enabled == '1' and verb != 'runinprefix'
-                                         and appid in {'17410', '35140', '49520'}))
+                                         and appid in {'17410', '35140', '49520', '200260', '209000'}))
 
     def test_steam_installscript_evaluator_never_provisions_physx(self):
         with mock.patch.object(policy, 'ensure_physx') as setup:
-            for appid in ('17410', '35140', '49520'):
+            for appid in ('17410', '35140', '49520', '200260', '209000'):
                 self.env['SteamAppId'] = appid
                 for verb in ('run', 'waitforexitandrun'):
                     for executable in ('iscriptevaluator.exe', '/steam/bin/iscriptevaluator.exe',
@@ -404,7 +421,7 @@ class PhysX(unittest.TestCase):
 
     def test_launch_without_an_executable_never_provisions_physx(self):
         with mock.patch.object(policy, 'ensure_physx') as setup:
-            for appid in ('17410', '35140', '49520'):
+            for appid in ('17410', '35140', '49520', '200260', '209000'):
                 self.env['SteamAppId'] = appid
                 for verb in ('run', 'waitforexitandrun'):
                     policy.Session.prepare_zluda_title(SimpleNamespace(env=self.env), ['proton', verb])
