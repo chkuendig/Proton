@@ -28,10 +28,10 @@ Assisted-by: Claude:claude-opus-5-5
  5 files changed, 83 insertions(+), 4 deletions(-)
 
 diff --git a/README.md b/README.md
-index c49b818..45781f2 100644
+index 4e59cad..569685d 100644
 --- a/README.md
 +++ b/README.md
-@@ -32,6 +32,8 @@ When available, DXVK-NVAPI uses NVIDIA's NVML management library to query temper
+@@ -29,6 +29,8 @@ When available, DXVK-NVAPI uses NVIDIA's NVML management library to query temper
  
  When available, DXVK-NVAPI uses `nvcuda.dll` to report CUDA capable GPUs to applications like PhysX. On the first CUDA topology query, it loads `nvcuda.dll` and matches the LUID and node mask of every CUDA device (`cuDeviceGetLuid`) with the LUIDs of the GPUs it knows from DXVK. This works the same for every GPU vendor and CUDA implementation, as long as the GPU is not skipped (see below). Without a usable `nvcuda.dll`, or without a matching device, only GPUs running the NVIDIA proprietary driver are reported as before.
  
@@ -41,10 +41,10 @@ index c49b818..45781f2 100644
  
  Like DXVK, this library is being built as a Windows DLL using MinGW. DXVK-NVAPI requires MinGW-w64 compiler and headers version 9 or newer, the Meson build system at least version 0.58 and Python 3 (needed for a prebuild validation script). This project uses git submodules. Ensure to fetch the submodules while or after cloning the repository, e.g. with `git clone --recurse-submodules git@github.com:jp7677/dxvk-nvapi.git`.
 diff --git a/src/nvapi/nvapi_adapter_registry.cpp b/src/nvapi/nvapi_adapter_registry.cpp
-index 82be146..af47ecd 100644
+index 878030b..1adc3c0 100644
 --- a/src/nvapi/nvapi_adapter_registry.cpp
 +++ b/src/nvapi/nvapi_adapter_registry.cpp
-@@ -190,7 +190,7 @@ namespace dxvk {
+@@ -186,7 +186,7 @@ namespace dxvk {
                  continue; // Report every adapter only once
  
              log::info(str::format("CUDA device ", ordinal, " corresponds to ", matches.front()->GetDeviceName()));
@@ -77,7 +77,7 @@ index 656e765..1e5dad6 100644
        private:
          NvapiResourceFactory& m_resourceFactory;
 diff --git a/src/nvapi_gpu.cpp b/src/nvapi_gpu.cpp
-index 2a72861..8b3facc 100644
+index 8822753..e7ca176 100644
 --- a/src/nvapi_gpu.cpp
 +++ b/src/nvapi_gpu.cpp
 @@ -675,10 +675,11 @@ NVAPI_FUNCTION NvAPI_GPU_CudaEnumComputeCapableGpus(NV_COMPUTE_GPU_TOPOLOGY* pCo

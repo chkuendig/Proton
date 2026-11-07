@@ -19,7 +19,7 @@ Assisted-by: Codex:gpt-6.1-sol
  2 files changed, 35 insertions(+)
 
 diff --git a/src/nvapi_gpu.cpp b/src/nvapi_gpu.cpp
-index 1525ba7..aaa5575 100644
+index c7d8f8b..b8bd0ea 100644
 --- a/src/nvapi_gpu.cpp
 +++ b/src/nvapi_gpu.cpp
 @@ -694,6 +694,8 @@ NVAPI_FUNCTION NvAPI_GPU_CudaEnumComputeCapableGpus(NV_COMPUTE_GPU_TOPOLOGY* pCo

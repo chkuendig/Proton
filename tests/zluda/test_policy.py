@@ -402,6 +402,14 @@ class PhysX(unittest.TestCase):
                                                            ['proton', verb, executable, 'installscript.vdf'])
             setup.assert_not_called()
 
+    def test_launch_without_an_executable_never_provisions_physx(self):
+        with mock.patch.object(policy, 'ensure_physx') as setup:
+            for appid in ('17410', '35140', '49520'):
+                self.env['SteamAppId'] = appid
+                for verb in ('run', 'waitforexitandrun'):
+                    policy.Session.prepare_zluda_title(SimpleNamespace(env=self.env), ['proton', verb])
+            setup.assert_not_called()
+
     def test_installer_children_finish_before_mirror_system_core_guard(self):
         binaries = self.root / 'game/Binaries'
         binaries.mkdir(parents=True)

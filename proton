@@ -1962,7 +1962,8 @@ class Session:
         # These titles' Steam or bundled PhysX ships only native GPU machine code (no PTX).
         # ZLUDA needs PTX-capable PhysX System Software.
         if (self.env.get('PROTON_ENABLE_ZLUDA') == '1' and appid in {'17410', '35140', '49520'}
-                and Path(argv[2].replace('\\', '/')).name.lower() != 'iscriptevaluator.exe'):
+                and any(Path(exe.replace('\\', '/')).name.lower() != 'iscriptevaluator.exe'
+                        for exe in argv[2:3])):
             ensure_physx(self.env)
         if appid == '17410':
             binaries = Path(self.env['STEAM_COMPAT_INSTALL_PATH']) / 'Binaries'

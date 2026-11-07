@@ -102,7 +102,6 @@ def native(deps, build, tool, source):
         copy(rocm / 'lib' / name, library / name, 0o755)
         for alias in aliases:
             link(name, library / alias)
-    (tool / 'files/bin/winetricks').unlink(missing_ok=True)
     notices(rocm / 'share/doc', tool / 'licenses/rocm')
     notices(deps / 'sdk/usr/share/doc', tool / 'licenses/rocm-packages')
     notices(build / 'numactl-2.0.18', tool / 'licenses/numactl')
