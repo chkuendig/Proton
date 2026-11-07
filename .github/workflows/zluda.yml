@@ -66,7 +66,7 @@ jobs:
               ccache --max-size=4G
               # Valve base commit time; component epochs are pinned in rules-zluda.mk.
               args=(-f "$1/Makefile.in" SRCDIR="$1" CONTAINER=1 BUILD_NAME=Proton-ZLUDA INTERNAL_TOOL_NAME=Proton-ZLUDA SOURCE_DATE_EPOCH=1791559305 BASE_SOURCE_DATE_EPOCH=1791559305 -j3)
-              make "${args[@]}" zluda
+              ZLUDA_RUN_PTX_TESTS=1 make "${args[@]}" zluda
               sha256sum dist/files/lib64/libcuda.so.1
               rm -rf obj-zluda/target
               df -h .

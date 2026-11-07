@@ -47,3 +47,9 @@ tar -xf "$deps/downloads/numactl-2.0.18.tar.gz" -C "$build"
 cd "$build/numactl-2.0.18"
 ./configure --prefix=/usr --libdir=/usr/lib --disable-static
 make -j3 libnuma.la
+
+if [[ ${ZLUDA_RUN_PTX_TESTS:-0} == 1 ]]; then
+    cd "$source"
+    LD_LIBRARY_PATH="$build/numactl-2.0.18/.libs:$LD_LIBRARY_PATH" \
+        cargo test --locked --offline --release -j3 -p ptx_parser -p ptx map_f64_to_f32 -- --test-threads=1
+fi
