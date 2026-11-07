@@ -22,6 +22,10 @@ import zluda as checks
 
 
 class Policy(unittest.TestCase):
+    def test_jc2_uses_the_automatic_pe32_cuda_policy(self):
+        self.assertIn('8190', policy.ZLUDA_TITLES)
+        self.assertIn('8190', policy.PE32_TITLES)
+
     def test_prefix_copies_detach_links_without_changing_the_supplier(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
