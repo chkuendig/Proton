@@ -182,9 +182,16 @@ def validate_sdk(source, build):
             raise ValueError('Incomplete portable SDK: ' + name)
 
 
+def validate_runtime(build):
+    path = build / 'dist/files/share/openxr/wineopenxr64.json'
+    if path.is_symlink() or not path.is_file():
+        raise ValueError('Missing installed runtime manifest: files/share/openxr/wineopenxr64.json')
+
+
 def export(source, build, output):
     if output.exists() or not (build / 'dist').is_dir():
         raise ValueError('Export output exists or stock install is absent')
+    validate_runtime(build)
     ident = identity(source, build)
     # Extra installed-tree/SDK staging plus compressed export must fit without
     # relying on the runner's original admission floor remaining free.
@@ -285,6 +292,7 @@ def load_stock(source, build, archive, expected):
         record = unpack(archive, stage)
         if record['identity'] != identity(source, build):
             raise ValueError('Exact stock input identity mismatch')
+        validate_runtime(stage)
         validate_sdk(source, stage)
         for name in ROOTS:
             if not (stage / name).is_dir():
@@ -310,6 +318,7 @@ def ready(source, build):
                 stat.S_IMODE(path.stat().st_mode) != row['mode'] or tree(path) != wanted):
             raise ValueError('Imported SDK/source/raw stub bytes/type/mode/coverage drift: ' + name)
     validate_sdk(source, build)
+    validate_runtime(build)
 
 
 def qualification(build, output):
@@ -426,7 +435,7 @@ def compare(cold, warm):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('action', choices=['identity', 'export', 'import', 'ready', 'qualification', 'compare'])
+    p.add_argument('action', choices=['identity', 'export', 'import', 'ready', 'inventory', 'qualification', 'compare'])
     p.add_argument('paths', type=Path, nargs='+')
     a = p.parse_args(); v = a.paths
     if a.action == 'identity':
@@ -437,6 +446,9 @@ def main():
         load_stock(v[0], v[1], v[2], str(v[3]))
     elif a.action == 'ready':
         ready(*v)
+    elif a.action == 'inventory':
+        write(v[1], {'evidence_kind': 'pre-launch inventory, not qualification',
+                     'installed_files': tree(v[0] / 'redist')})
     elif a.action == 'qualification':
         qualification(*v)
     elif a.action == 'compare':

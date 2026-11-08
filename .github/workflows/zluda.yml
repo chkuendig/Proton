@@ -69,7 +69,7 @@ jobs:
           python3 tests/zluda/test_patches.py
           python3 -B .github/test_piper_downloads.py
           make --version
-          python3 -B tests/zluda/test_stock.py
+          python3 -B tests/zluda/test_stock.py -v
           python3 -B .github/test_proton_stock_artifact.py
       - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         id: piper-cache
@@ -158,6 +158,7 @@ jobs:
                 python3 "$1/make/zluda-stock.py" identity "$1" /work/build /work/STOCK-INPUT-AFTER.json
                 cmp /work/stock-seed/STOCK-INPUT-BEFORE.json /work/STOCK-INPUT-AFTER.json
                 ccache --show-stats > /work/STOCK-CCACHE-AFTER.txt
+                python3 "$1/make/zluda-stock.py" inventory /work/build /work/STOCK-PRE-LAUNCH-INVENTORY.json
               fi
             ' bash "$GITHUB_WORKSPACE" 2>&1 | tee /work/build.log
       - name: Run bridge native unit tests
@@ -176,8 +177,10 @@ jobs:
           set -euo pipefail
           docker run --rm --memory=6g --cpus=3 \
             -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -v /work:/work -w /work/build \
-            "$SDK" bash -euo pipefail -c '
-              xvfb-run -a make -f "$1/Makefile.in" SRCDIR="$1" CONTAINER=1 SOURCE_DATE_EPOCH=1791559305 BASE_SOURCE_DATE_EPOCH=1791559305 -j3 zluda-launcher-smoke
+            -e STOCK_MODE "$SDK" bash -euo pipefail -c '
+              reuse=()
+              if [ "$STOCK_MODE" != off ]; then reuse=(ZLUDA_STOCK_REUSE=1 BUILD_NAME=Proton-ZLUDA INTERNAL_TOOL_NAME=Proton-ZLUDA); fi
+              xvfb-run -a make -f "$1/Makefile.in" SRCDIR="$1" CONTAINER=1 SOURCE_DATE_EPOCH=1791559305 BASE_SOURCE_DATE_EPOCH=1791559305 -j3 "${reuse[@]}" zluda-launcher-smoke
               tar -czf /work/Proton-ZLUDA.tar.gz -C redist .
             ' bash "$GITHUB_WORKSPACE" 2>&1 | tee /work/launcher-smoke.log
       - name: Qualify stock, SDK, binaries and report every full-tree delta

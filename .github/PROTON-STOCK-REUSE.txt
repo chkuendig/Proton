@@ -100,3 +100,14 @@ The controller compare-production.py projects type/sha/bytes/mode/link target,
 drops only the dot root and mtime_ns representation field, and reports EVERY
 difference without exemption. It does not edit files or approve adoption. The
 source inventory is read-only; a byte-verified copy is bound in the review packet.
+
+The stock-only graph retains installed runtime file dependencies of ordinary
+prefix creation, including files/share/openxr/wineopenxr64.json. The graph fixture
+compares all installed-file prerequisites of ordinary default_pfx with stock
+all-dist; an omitted prerequisite fails. Export/import/ready also refuse a missing
+OpenXR runtime manifest. Launcher smoke uses the imported graph and tool identity
+for both proof arms. A full pre-launch installed inventory is retained separately
+from qualification, so a later launcher failure cannot erase inventory evidence.
+All make-graph test names are printed by the CI precheck; skipping is still fatal
+when GNU make is unavailable in CI. The final qualification and seed publication
+remain conditional on every existing test and postcheck succeeding.

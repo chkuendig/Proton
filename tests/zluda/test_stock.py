@@ -139,6 +139,8 @@ class Fixture(unittest.TestCase):
         source = self.root / 'source'; build = self.root / 'build'
         (source / 'make').mkdir(parents=True); (build / 'dist/files/bin').mkdir(parents=True)
         (build / 'dist/files/bin/wine').write_bytes(b'\x7fELFwine')
+        manifest = build / 'dist/files/share/openxr/wineopenxr64.json'
+        manifest.parent.mkdir(parents=True); manifest.write_text('{"file_format_version":"1.0.0"}')
         (build / 'dist/version').write_text('time assembly')
         (build / 'dist/LICENSE').write_text('candidate source ID')
         prepared = 'dlls/ntdll/callback.c'
@@ -162,6 +164,41 @@ class Fixture(unittest.TestCase):
             path=build/f'dst-wine-{arch}/lib/wine/{arch}-windows/nvcuda.dll'
             path.parent.mkdir(parents=True);path.write_bytes(b'MZrawstub')
         return source,build
+
+    def test_missing_runtime_manifest_refuses_export_before_mutation(self):
+        source,build=self.portable_build(); archive=self.root/'export.tar.gz'
+        (build/'dist/files/share/openxr/wineopenxr64.json').unlink()
+        before=stock.tree(build)
+        with self.assertRaisesRegex(ValueError,'Missing installed runtime manifest'):
+            stock.export(source,build,archive)
+        self.assertEqual(stock.tree(build),before)
+        self.assertFalse(archive.exists())
+
+    def test_import_missing_runtime_manifest_leaves_build_empty(self):
+        archive,_,_=self.archive(); build=self.root/'build';build.mkdir()
+        with patch.object(stock,'identity',return_value={'digest':'pinned'}):
+            with self.assertRaisesRegex(ValueError,'Missing installed runtime manifest'):
+                stock.load_stock(self.root,build,archive,stock.sha(archive))
+        self.assertEqual(list(build.iterdir()),[])
+
+    def test_runtime_manifest_symlink_refused(self):
+        _,build=self.portable_build(); path=build/'dist/files/share/openxr/wineopenxr64.json'
+        path.unlink();path.symlink_to('../../bin/wine')
+        with self.assertRaisesRegex(ValueError,'Missing installed runtime manifest'):
+            stock.validate_runtime(build)
+
+    def test_prelaunch_inventory_keeps_full_tree_without_qualification(self):
+        build=self.root/'build';redist=build/'redist';redist.mkdir(parents=True)
+        (redist/'runtime.json').write_text('{"runtime":"fixture"}')
+        (redist/'probe').write_bytes(b'\x7fELFfixture');(redist/'probe').chmod(0o755)
+        (redist/'alias').symlink_to('probe')
+        output=self.root/'inventory.json';before=stock.tree(redist)
+        subprocess.run([sys.executable,'-B',str(ROOT/'make/zluda-stock.py'),
+                        'inventory',str(build),str(output)],check=True,capture_output=True)
+        row=json.loads(output.read_text())
+        self.assertEqual(row['installed_files'],before)
+        self.assertEqual(stock.tree(redist),before)
+        self.assertIn('not qualification',row['evidence_kind'])
 
     def test_export_import_roundtrip_and_ready(self):
         source,build=self.portable_build(); archive=self.root/'export.tar.gz'
@@ -343,8 +380,10 @@ class MakeGraph(unittest.TestCase):
             args=['make','-n','-j3','-f',str(ROOT/'Makefile.in'),'SRCDIR='+str(ROOT),'CONTAINER=1',
                   'BUILD_NAME=Proton-ZLUDA','INTERNAL_TOOL_NAME=Proton-ZLUDA',
                   'SOURCE_DATE_EPOCH=1791559305','BASE_SOURCE_DATE_EPOCH=1791559305']
-            if reuse:args+=['ZLUDA_STOCK_REUSE=1']
-            else:args+=['ZLUDA_STOCK_ONLY=1','-p','-f',str(directory/'query.mk')]
+            if reuse is True:args+=['ZLUDA_STOCK_REUSE=1']
+            else:
+                if reuse is False:args+=['ZLUDA_STOCK_ONLY=1']
+                args+=['-p','-f',str(directory/'query.mk')]
             return subprocess.run(args+[target],cwd=directory,env=env,text=True,capture_output=True,timeout=20)
 
     def test_imported_wine_uses_verifier_without_configure(self):
@@ -355,6 +394,16 @@ class MakeGraph(unittest.TestCase):
         r=self.run_make(False,'__stock_graph__');self.assertEqual(r.returncode,0,r.stderr)
         line=next(l for l in r.stdout.splitlines() if l.startswith('all-dist:'))
         self.assertNotIn('default_pfx',line.split());self.assertNotIn('zluda',line.split());self.assertNotIn('zluda-wine',line.split())
+
+    def test_stock_carries_every_installed_prefix_dependency(self):
+        ordinary=self.run_make(None,'__stock_graph__');self.assertEqual(ordinary.returncode,0,ordinary.stderr)
+        cold=self.run_make(False,'__stock_graph__');self.assertEqual(cold.returncode,0,cold.stderr)
+        prefix=next(l for l in ordinary.stdout.splitlines() if l.startswith('default_pfx:'))
+        required={p.split('/dist/files/',1)[1] for p in prefix.split()[1:] if '/dist/files/' in p}
+        self.assertTrue(required,'ordinary prefix must expose installed runtime prerequisites')
+        all_dist=next(l for l in cold.stdout.splitlines() if l.startswith('all-dist:'))
+        installed={p.split('/dist/files/',1)[1] for p in all_dist.split()[1:] if '/dist/files/' in p}
+        self.assertFalse(required-installed,'stock omits ordinary installed prefix dependencies: '+repr(required-installed))
 
 
 if __name__ == '__main__':

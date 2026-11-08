@@ -461,6 +461,12 @@ $(WINEOPENXR64_JSON): $(WINEOPENXR_SRC)/wineopenxr64.json
 	mkdir -p $(dir $@)
 	cp -a $< $@
 
+# Prefix creation normally pulls this installed runtime manifest. Stock export
+# omits the prefix, but must still carry the complete runtime closure.
+ifeq ($(ZLUDA_STOCK_ONLY),1)
+all-dist: $(WINEOPENXR64_JSON)
+endif
+
 
 ##
 ## steam.exe
