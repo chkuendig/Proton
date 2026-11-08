@@ -38,6 +38,25 @@ jobs:
           bash -n make/zluda-build.sh
           python3 tests/zluda/test_policy.py
           python3 tests/zluda/test_patches.py
+          python3 -B .github/test_piper_downloads.py
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: piper-cache
+        with:
+          path: /work/piper-downloads
+          key: piper-downloads-v1-${{ hashFiles('.github/piper-downloads.json') }}
+      - name: Prefetch and verify Piper ExternalProject archives
+        id: piper-prefetch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 -B .github/piper-downloads.py prepare /work/piper-downloads piper 2>&1 | tee /work/piper-prefetch.log
+      - name: Save verified Piper download cache
+        if: steps.piper-prefetch.outcome == 'success' && steps.piper-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: /work/piper-downloads
+          key: piper-downloads-v1-${{ hashFiles('.github/piper-downloads.json') }}
       - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         id: cache
         with:
@@ -45,7 +64,7 @@ jobs:
             /work/ccache
             /work/cargo/registry/cache
             /work/cargo/registry/index
-          key: zluda-make-v1-${{ hashFiles('make/zluda-deps.json') }}-${{ github.run_id }}
+          key: zluda-make-v1-${{ hashFiles('make/zluda-deps.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             zluda-make-v1-${{ hashFiles('make/zluda-deps.json') }}-
             zluda-make-v1-
@@ -121,6 +140,7 @@ jobs:
             /work/build.log
             /work/launcher-smoke.log
             /work/bridge-native-tests.log
+            /work/piper-prefetch.log
             /work/build/launcher-smoke.json
             /work/build/obj-zluda-wine/artifacts/SHA256SUMS
           retention-days: 14
