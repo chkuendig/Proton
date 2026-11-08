@@ -3,6 +3,25 @@ on:
   push:
     branches: ['valve/selfcontained-*']
   workflow_dispatch:
+    inputs:
+      stock_mode:
+        type: choice
+        options: [off, cold, warm]
+        default: off
+      stock_seed_run:
+        type: string
+        default: ''
+      stock_seed_artifact:
+        type: string
+        default: ''
+      stock_seed_head:
+        description: Exact full producer SHA of the cleared cold seed
+        type: string
+        default: ''
+      stock_seed_digest:
+        description: SHA256 of the exact cold seed artifact ZIP
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -10,6 +29,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
+    permissions:
+      contents: read
+      actions: read # Read only the explicitly pinned cold seed artifact.
     runs-on: ubuntu-24.04
     timeout-minutes: 350
     env:
@@ -17,6 +39,11 @@ jobs:
       GIT_LFS_SKIP_SMUDGE: '1'
       CARGO_HOME: /work/cargo
       CCACHE_DIR: /work/ccache
+      STOCK_MODE: ${{ inputs.stock_mode || 'off' }}
+      STOCK_SEED_RUN: ${{ inputs.stock_seed_run }}
+      STOCK_SEED_ARTIFACT: ${{ inputs.stock_seed_artifact }}
+      STOCK_SEED_DIGEST: ${{ inputs.stock_seed_digest }}
+      STOCK_SEED_HEAD: ${{ inputs.stock_seed_head }}
     steps:
       - name: Make room before checkout and SDK pull
         run: |
@@ -30,6 +57,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Validate explicit stock proof inputs
+        run: python3 -B .github/proton-stock-artifact.py check
       - name: Checkout pinned public components
         run: |
           git submodule update --init --recursive --depth=1 --filter=blob:none --jobs=3
@@ -39,6 +68,9 @@ jobs:
           python3 tests/zluda/test_policy.py
           python3 tests/zluda/test_patches.py
           python3 -B .github/test_piper_downloads.py
+          make --version
+          python3 -B tests/zluda/test_stock.py
+          python3 -B .github/test_proton_stock_artifact.py
       - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         id: piper-cache
         with:
@@ -73,26 +105,60 @@ jobs:
           docker pull "$SDK"
           df -h / /work
           test "$(df --output=avail -B1 /work | tail -1)" -ge 51539607552
+      - name: Fetch exact successful cold stock seed
+        if: env.STOCK_MODE == 'warm'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B .github/proton-stock-artifact.py fetch /work/stock-seed
       - name: Build complete redistributable with Proton make
         run: |
           set -euo pipefail
           mkdir -p /work/build /work/cargo /work/ccache
           docker run --rm --memory=10g --cpus=3 \
             -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -v /work:/work \
-            -w /work/build -e CARGO_HOME -e CCACHE_DIR \
+            -w /work/build -e CARGO_HOME -e CCACHE_DIR -e SDK -e STOCK_MODE \
             "$SDK" bash -euo pipefail -c '
               git config --global --add safe.directory "*"
               ccache --max-size=4G
               # Valve base commit time; component epochs are pinned in rules-zluda.mk.
               args=(-f "$1/Makefile.in" SRCDIR="$1" CONTAINER=1 BUILD_NAME=Proton-ZLUDA INTERNAL_TOOL_NAME=Proton-ZLUDA SOURCE_DATE_EPOCH=1791559305 BASE_SOURCE_DATE_EPOCH=1791559305 -j3)
-              ZLUDA_RUN_PTX_TESTS=1 make "${args[@]}" zluda
+              reuse=()
+              if [ "$STOCK_MODE" != off ]; then
+                ccache --show-stats > /work/STOCK-CCACHE-BEFORE.txt
+                echo "STOCK_PHASE_BEGIN mode=$STOCK_MODE"
+              fi
+              if [ "$STOCK_MODE" = cold ]; then
+                test -z "$(find . -mindepth 1 -maxdepth 1 -print -quit)"
+                mkdir /work/stock-seed
+                python3 "$1/make/zluda-stock.py" identity "$1" /work/build /work/stock-seed/STOCK-INPUT-BEFORE.json
+                make "${args[@]}" ZLUDA_STOCK_ONLY=1 all-dist
+                python3 "$1/make/zluda-wine-sdk.py" /work/build/src-wine /work/build/obj-wine-x86_64 /work/build/zluda-wine-sdk
+                python3 "$1/make/zluda-stock.py" export "$1" /work/build /work/stock-seed/stock.tar.gz
+                cp STOCK-EXPORT.json /work/stock-seed/STOCK-EXPORT.json
+                reuse=(ZLUDA_STOCK_REUSE=1)
+              elif [ "$STOCK_MODE" = warm ]; then
+                digest=$(sha256sum /work/stock-seed/stock.tar.gz)
+                digest=${digest%% *}
+                python3 "$1/make/zluda-stock.py" import "$1" /work/build /work/stock-seed/stock.tar.gz "$digest"
+                reuse=(ZLUDA_STOCK_REUSE=1)
+              fi
+              if [ "$STOCK_MODE" != off ]; then echo "STOCK_PHASE_END mode=$STOCK_MODE"; fi
+              echo NATIVE_PHASE_BEGIN
+              ZLUDA_RUN_PTX_TESTS=1 make "${args[@]}" "${reuse[@]}" zluda
+              echo NATIVE_PHASE_END
               sha256sum dist/files/lib64/libcuda.so.1
               rm -rf obj-zluda/target
               df -h .
-              make "${args[@]}" wine
-              make "${args[@]}" zluda-wine
-              make "${args[@]}" redist
-              xvfb-run -a make "${args[@]}" zluda-smoke
+              make "${args[@]}" "${reuse[@]}" wine
+              make "${args[@]}" "${reuse[@]}" zluda-wine
+              make "${args[@]}" "${reuse[@]}" redist
+              xvfb-run -a make "${args[@]}" "${reuse[@]}" zluda-smoke
+              if [ "$STOCK_MODE" != off ]; then
+                python3 "$1/make/zluda-stock.py" ready "$1" /work/build
+                python3 "$1/make/zluda-stock.py" identity "$1" /work/build /work/STOCK-INPUT-AFTER.json
+                cmp /work/stock-seed/STOCK-INPUT-BEFORE.json /work/STOCK-INPUT-AFTER.json
+                ccache --show-stats > /work/STOCK-CCACHE-AFTER.txt
+              fi
             ' bash "$GITHUB_WORKSPACE" 2>&1 | tee /work/build.log
       - name: Run bridge native unit tests
         run: |
@@ -114,6 +180,47 @@ jobs:
               xvfb-run -a make -f "$1/Makefile.in" SRCDIR="$1" CONTAINER=1 SOURCE_DATE_EPOCH=1791559305 BASE_SOURCE_DATE_EPOCH=1791559305 -j3 zluda-launcher-smoke
               tar -czf /work/Proton-ZLUDA.tar.gz -C redist .
             ' bash "$GITHUB_WORKSPACE" 2>&1 | tee /work/launcher-smoke.log
+      - name: Qualify stock, SDK, binaries and report every full-tree delta
+        if: env.STOCK_MODE != 'off'
+        run: |
+          set -euo pipefail
+          docker run --rm --memory=6g --cpus=3 \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -v /work:/work -w /work/build \
+            -e SDK -e STOCK_MODE "$SDK" bash -euo pipefail -c '
+              git config --global --add safe.directory "*"
+              python3 "$1/make/zluda-stock.py" ready "$1" /work/build
+              python3 "$1/make/zluda-stock.py" identity "$1" /work/build /work/STOCK-INPUT-AFTER.json
+              cmp /work/stock-seed/STOCK-INPUT-BEFORE.json /work/STOCK-INPUT-AFTER.json
+              python3 "$1/make/zluda-stock.py" qualification /work/build /work/STOCK-QUALIFICATION.json
+              if [ "$STOCK_MODE" = cold ]; then
+                cp /work/STOCK-QUALIFICATION.json /work/stock-seed/COLD-QUALIFICATION.json
+                cp /work/STOCK-INPUT-AFTER.json /work/stock-seed/STOCK-INPUT-AFTER.json
+              else
+                python3 "$1/make/zluda-stock.py" compare /work/stock-seed/COLD-QUALIFICATION.json /work/STOCK-QUALIFICATION.json /work/STOCK-COMPARISON.json
+                # A green job retains all tests. Registry deltas still require
+                # B classification before an equivalence/admission claim.
+                cat /work/STOCK-COMPARISON.json
+              fi
+            ' bash "$GITHUB_WORKSPACE"
+      - name: Publish fully tested cold stock seed
+        if: env.STOCK_MODE == 'cold' && success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: proton-stock-seed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /work/stock-seed/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+      - name: Retain stock proof and all unnormalized differences
+        if: always() && env.STOCK_MODE != 'off'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: proton-stock-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /work/STOCK-*.json
+            /work/STOCK-*.txt
+            /work/build/STOCK-*.json
+          retention-days: 14
       - name: Save compiler and Cargo download cache
         if: always() && steps.cache.outputs.cache-primary-key != ''
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4

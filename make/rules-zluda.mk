@@ -34,9 +34,20 @@ $(OBJ)/.zluda-dist: $(OBJ)/.zluda-build
 	python3 "$(SRC)/make/zluda.py" native "$(ZLUDA_DEPS)" "$(ZLUDA_BUILD)" "$(DST_BASE)" "$(ZLUDA_ORIGIN)"
 	touch $@
 
-$(OBJ)/.zluda-wine-build: $(OBJ)/.zluda-wine-post-source $(OBJ)/.zluda-deps $(OBJ)/.wine-x86_64-build
+ifeq ($(ZLUDA_STOCK_REUSE),)
+ZLUDA_WINE_PREREQUISITE := $(OBJ)/.wine-x86_64-build
+ZLUDA_WINE_INSTALL_PREREQUISITES := $(OBJ)/.wine-x86_64-dist $(OBJ)/.wine-i386-dist
+else
+ZLUDA_WINE_PREREQUISITE :=
+ZLUDA_WINE_INSTALL_PREREQUISITES :=
+$(OBJ)/.zluda-wine-build $(OBJ)/.zluda-wine-dist: | zluda-stock-ready
+endif
+
+$(OBJ)/.zluda-wine-build: $(OBJ)/.zluda-wine-post-source $(OBJ)/.zluda-deps $(ZLUDA_WINE_PREREQUISITE)
 $(OBJ)/.zluda-wine-build: $(SRC)/make/zluda-wine-sdk.py $(SRC)/make/zluda-wine-abi.json
+ifeq ($(ZLUDA_STOCK_REUSE),)
 	python3 "$(SRC)/make/zluda-wine-sdk.py" "$(WINE_SRC)" "$(WINE_x86_64_OBJ)" "$(ZLUDA_WINE_SDK)"
+endif
 	rm -rf "$(ZLUDA_WINE_BUILD)"
 	env WINE_SDK_ROOT="$(ZLUDA_WINE_SDK)" ZLUDA_WINE_BACKEND_SOURCE="$(ZLUDA_ORIGIN)" \
 	    ZLUDA_WINE_SOURCE_ID="$$(git -C "$(ZLUDA_WINE_ORIGIN)" rev-parse HEAD)" \
@@ -48,7 +59,7 @@ $(OBJ)/.zluda-wine-build: $(SRC)/make/zluda-wine-sdk.py $(SRC)/make/zluda-wine-a
 	touch $@
 
 # Install only after Wine has copied both architectures into the distribution.
-$(OBJ)/.zluda-wine-dist: $(OBJ)/.zluda-wine-build $(OBJ)/.wine-x86_64-dist $(OBJ)/.wine-i386-dist
+$(OBJ)/.zluda-wine-dist: $(OBJ)/.zluda-wine-build $(ZLUDA_WINE_INSTALL_PREREQUISITES)
 $(OBJ)/.zluda-wine-dist: $(SRC)/make/zluda.py $(SRC)/proton
 	python3 "$(SRC)/make/zluda.py" bridge "$(ZLUDA_WINE_BUILD)" "$(DST_BASE)" "$(ZLUDA_WINE_ORIGIN)" "$(WINE_SRC)" "$(OBJ)"
 	touch $@
@@ -56,7 +67,9 @@ $(OBJ)/.zluda-wine-dist: $(SRC)/make/zluda.py $(SRC)/proton
 zluda: $(OBJ)/.zluda-dist
 zluda-wine: $(OBJ)/.zluda-wine-dist
 zluda-deps: $(OBJ)/.zluda-deps
+ifneq ($(ZLUDA_STOCK_ONLY),1)
 all all-dist default_pfx: zluda zluda-wine
+endif
 .PHONY: zluda zluda-wine zluda-deps zluda-smoke zluda-launcher-smoke
 
 zluda-smoke:

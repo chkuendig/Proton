@@ -138,7 +138,10 @@ include $(SRC)/make/rules-winemaker.mk
 include $(SRC)/make/rules-wine-requests.mk
 include $(SRC)/make/rules-wine-tools.mk
 include $(SRC)/make/rules-cargo.mk
+include $(SRC)/make/rules-zluda-stock.mk
 include $(SRC)/make/rules-zluda.mk
+
+ifeq ($(ZLUDA_STOCK_REUSE),)
 
 
 ##
@@ -1338,11 +1341,17 @@ all-dist: $(OVR_aarch64_DIST)
 endif
 
 
+endif # ordinary stock component rules
+
 ##
 ## default_pfx
 ##
 
+ifeq ($(ZLUDA_STOCK_REUSE),)
 default_pfx: wine gst_good gst_bad gst_libav gst_plugins_rs lsteamclient steamexe vrclient wineopenxr $(WINEOPENXR64_JSON) dxvk dxvk-nvapi vkd3d-proton
+else
+default_pfx: zluda-stock-ready
+endif
 	find $(DST_LIBDIR)/wine -type f -execdir chmod a-w '{}' '+'
 	rm -rf $(abspath $(DIST_PREFIX))
 	rm -rf $(abspath $(DIST_PREFIX_ARM64))
@@ -1353,7 +1362,9 @@ ifneq ($(findstring aarch64,$(unix_ARCHS)),)
 	python3 $(SRCDIR)/default_pfx.py $(abspath $(DIST_PREFIX_ARM64)) $(abspath $(DST_DIR)) 1
 endif
 
+ifneq ($(ZLUDA_STOCK_ONLY),1)
 all-dist: default_pfx
+endif
 
 
 ##
