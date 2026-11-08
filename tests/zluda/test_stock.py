@@ -368,6 +368,52 @@ class Comparison(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'raw evidence'):self.compare(a,b)
 
 
+def database_prerequisites(output, target):
+    lines=output.splitlines()
+    if lines.count('# Files') != 1:
+        raise AssertionError('Expected one GNU make # Files section')
+    start=lines.index('# Files')+1
+    ends=[i for i in range(start,len(lines)) if lines[i].startswith('# files hash-table stats:')]
+    if len(ends) != 1:
+        raise AssertionError('Missing or ambiguous GNU make # Files end')
+    records=[line for line in lines[start:ends[0]] if line.startswith(target+':')]
+    if len(records) != 1:
+        raise AssertionError('Expected one actual target record: '+target)
+    return set(records[0].split(':',1)[1].split())
+
+
+def runtime_dependency_parity(ordinary, stock_graph):
+    required={p.split('/dist/files/',1)[1] for p in database_prerequisites(ordinary,'default_pfx') if '/dist/files/' in p}
+    if not required:
+        raise AssertionError('ordinary prefix must expose installed runtime prerequisites')
+    installed={p.split('/dist/files/',1)[1] for p in database_prerequisites(stock_graph,'all-dist') if '/dist/files/' in p}
+    if required-installed:
+        raise AssertionError('stock omits ordinary installed prefix dependencies: '+repr(sorted(required-installed)))
+    return required
+
+
+class MakeDatabaseParser(unittest.TestCase):
+    def fixture(self):
+        return json.loads((ROOT/'tests/zluda/fixtures/stock-make-database.json').read_text())
+
+    def test_actual_graph_ignores_macro_target_before_files_section(self):
+        row=self.fixture()
+        self.assertEqual(next(l for l in row['stock'].splitlines() if l.startswith('all-dist:')),'all-dist: $(1)-dist')
+        self.assertEqual(runtime_dependency_parity(row['ordinary'],row['stock']),{'share/openxr/wineopenxr64.json'})
+
+    def test_actual_graph_missing_openxr_still_fails(self):
+        row=self.fixture()
+        with self.assertRaisesRegex(AssertionError,'stock omits.*share/openxr/wineopenxr64.json'):
+            runtime_dependency_parity(row['ordinary'],row['stock_missing_openxr'])
+
+    def test_missing_database_section_or_record_fails(self):
+        row=self.fixture()
+        for data in [row['stock'].replace('# Files\n',''),row['stock'].replace('# files hash-table stats:','broken end:'),
+                     row['stock'].replace('\nall-dist:', '\nother:')]:
+            with self.subTest(data=data[-100:]),self.assertRaises(AssertionError):
+                database_prerequisites(data,'all-dist')
+
+
 @unittest.skipUnless(shutil.which('make'), 'GNU make unavailable; cloud runner executes graph checks')
 class MakeGraph(unittest.TestCase):
     def run_make(self, reuse, target):
@@ -376,7 +422,7 @@ class MakeGraph(unittest.TestCase):
             for name,body in [('rsync','exit 0'),('cc','echo fixture-gcc')]:
                 path=binary/name;path.write_text('#!/bin/sh\n'+body+'\n');path.chmod(0o755)
             (directory/'query.mk').write_text('__stock_graph__:\n\t@:\n')
-            env=dict(os.environ,PATH=str(binary)+':'+os.environ['PATH'])
+            env=dict(os.environ,PATH=str(binary)+':'+os.environ['PATH'],LC_ALL='C')
             args=['make','-n','-j3','-f',str(ROOT/'Makefile.in'),'SRCDIR='+str(ROOT),'CONTAINER=1',
                   'BUILD_NAME=Proton-ZLUDA','INTERNAL_TOOL_NAME=Proton-ZLUDA',
                   'SOURCE_DATE_EPOCH=1791559305','BASE_SOURCE_DATE_EPOCH=1791559305']
@@ -392,18 +438,13 @@ class MakeGraph(unittest.TestCase):
 
     def test_stock_graph_excludes_candidate_and_prefix(self):
         r=self.run_make(False,'__stock_graph__');self.assertEqual(r.returncode,0,r.stderr)
-        line=next(l for l in r.stdout.splitlines() if l.startswith('all-dist:'))
-        self.assertNotIn('default_pfx',line.split());self.assertNotIn('zluda',line.split());self.assertNotIn('zluda-wine',line.split())
+        deps=database_prerequisites(r.stdout,'all-dist')
+        self.assertNotIn('default_pfx',deps);self.assertNotIn('zluda',deps);self.assertNotIn('zluda-wine',deps)
 
     def test_stock_carries_every_installed_prefix_dependency(self):
         ordinary=self.run_make(None,'__stock_graph__');self.assertEqual(ordinary.returncode,0,ordinary.stderr)
         cold=self.run_make(False,'__stock_graph__');self.assertEqual(cold.returncode,0,cold.stderr)
-        prefix=next(l for l in ordinary.stdout.splitlines() if l.startswith('default_pfx:'))
-        required={p.split('/dist/files/',1)[1] for p in prefix.split()[1:] if '/dist/files/' in p}
-        self.assertTrue(required,'ordinary prefix must expose installed runtime prerequisites')
-        all_dist=next(l for l in cold.stdout.splitlines() if l.startswith('all-dist:'))
-        installed={p.split('/dist/files/',1)[1] for p in all_dist.split()[1:] if '/dist/files/' in p}
-        self.assertFalse(required-installed,'stock omits ordinary installed prefix dependencies: '+repr(required-installed))
+        runtime_dependency_parity(ordinary.stdout,cold.stdout)
 
 
 if __name__ == '__main__':
