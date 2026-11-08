@@ -26,6 +26,16 @@ class Policy(unittest.TestCase):
         self.assertIn('8190', policy.ZLUDA_TITLES)
         self.assertIn('8190', policy.PE32_TITLES)
 
+    def test_bureau_keeps_stock_classic_mode(self):
+        # The Bureau exits during startup in new WoW64, also on stock Proton 11.
+        self.assertNotIn('65930', policy.ZLUDA_TITLES)
+        env = {'SteamAppId': '65930'}
+        with mock.patch.object(policy, 'game_setting', return_value='1'):
+            policy.early_title_policy(env, 'run')
+        self.assertNotIn('PROTON_USE_WOW64', env)
+        self.assertNotIn('PROTON_ENABLE_ZLUDA', env)
+        self.assertNotIn('PROTON_FORCE_NVAPI', env)
+
     def test_city_and_origins_get_pe32_cuda_and_physx_without_a_launcher_swap(self):
         with mock.patch.object(policy, 'game_setting', return_value='1'), \
              mock.patch.object(policy, 'ensure_physx') as setup:
