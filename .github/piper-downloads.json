@@ -1,0 +1,44 @@
+{
+  "cmake_sha256": {
+    "piper": "70d118a08c7671705b478a77c1b83b7b9951d9544ea3fb6739976e726c4c9c01",
+    "phonemize": "944b8b071aa76b5093174f3edc55190c6e2bf13b17d83d8a9fa4199c2329be4e"
+  },
+  "mutable_pic": {
+    "ref_api": "https://api.github.com/repos/shaunren/piper-phonemize/git/ref/heads/pic",
+    "commit": "5ecbb9b59abcffe03a9775ae82491c9ac5037f4d"
+  },
+  "archives": [
+    {
+      "name": "fmt",
+      "url": "https://github.com/fmtlib/fmt/archive/refs/tags/10.0.0.zip",
+      "sha256": "5bf4d5358301fdf3bd100c01b9d4c1fbb2091dc2267fb4fa6d7cd522b3e47179",
+      "filename": "10.0.0.zip",
+      "role": "piper",
+      "cmake_url": "https://github.com/fmtlib/fmt/archive/refs/tags/${FMT_VERSION}.zip"
+    },
+    {
+      "name": "spdlog",
+      "url": "https://github.com/gabime/spdlog/archive/refs/tags/v1.12.0.zip",
+      "sha256": "6174bf8885287422a6c6a0312eb8a30e8d22bcfcee7c48a6d02d1835d7769232",
+      "filename": "v1.12.0.zip",
+      "role": "piper",
+      "cmake_url": "https://github.com/gabime/spdlog/archive/refs/tags/v${SPDLOG_VERSION}.zip"
+    },
+    {
+      "name": "piper-phonemize",
+      "url": "https://github.com/shaunren/piper-phonemize/archive/refs/heads/pic.zip",
+      "sha256": "728800cd310c64e6b6877866161b32ff0dc2d9c52ebdc54281fa21e448d2adef",
+      "filename": "pic.zip",
+      "role": "piper",
+      "cmake_url": "https://github.com/shaunren/piper-phonemize/archive/refs/heads/pic.zip"
+    },
+    {
+      "name": "espeak-ng",
+      "url": "https://github.com/rhasspy/espeak-ng/archive/0f65aa301e0d6bae5e172cc74197d32a6182200f.zip",
+      "sha256": "150fc955926a084a77ebe25c9e8287bde2e2a17bbf9b23a25c147b556837949f",
+      "filename": "0f65aa301e0d6bae5e172cc74197d32a6182200f.zip",
+      "role": "phonemize",
+      "cmake_url": "https://github.com/rhasspy/espeak-ng/archive/0f65aa301e0d6bae5e172cc74197d32a6182200f.zip"
+    }
+  ]
+}
