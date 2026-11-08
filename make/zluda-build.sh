@@ -50,6 +50,7 @@ make -j3 libnuma.la
 
 if [[ ${ZLUDA_RUN_PTX_TESTS:-0} == 1 ]]; then
     cd "$source"
-    LD_LIBRARY_PATH="$build/numactl-2.0.18/.libs:$LD_LIBRARY_PATH" \
-        cargo test --locked --offline --release -j3 -p ptx_parser -p ptx map_f64_to_f32 -- --test-threads=1
+    export LD_LIBRARY_PATH="$build/numactl-2.0.18/.libs:$LD_LIBRARY_PATH"
+    cargo test --locked --offline --release -j3 -p ptx_parser -- --test-threads=1
+    cargo test --locked --offline --release -j3 -p ptx --features ptx/ci_build legacy_ -- --test-threads=1 --skip _amdgpu --skip _cuda
 fi
