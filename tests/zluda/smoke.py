@@ -21,7 +21,9 @@ for path in (tool / 'files/lib/wine').rglob('*'):
 # Valve intentionally leaves its Steam-provided FFmpeg unbundled. Use the
 # exact libraries already built by this make, outside the redistributable.
 library_dirs = [tool / name for name in ['files/lib64', 'files/lib/wine/x86_64-unix', 'files/lib/x86_64-linux-gnu']]
-library_dirs += sorted((obj / 'dst-ffmpeg-x86_64').glob('lib/*'))
+test_video = obj / 'zluda-test-runtime/x86_64/video'
+assert test_video.is_dir() and any(test_video.iterdir()), test_video
+library_dirs.append(test_video)
 env = dict(os.environ, LD_LIBRARY_PATH=':'.join(map(str, library_dirs)))
 for directory in ['files/lib64', 'files/lib/wine/x86_64-unix', 'files/lib/wine-cuda/zluda/x86_64-unix']:
     for path in (tool / directory).iterdir():

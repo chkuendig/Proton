@@ -163,7 +163,53 @@ class Fixture(unittest.TestCase):
         for arch in ['i386','x86_64']:
             path=build/f'dst-wine-{arch}/lib/wine/{arch}-windows/nvcuda.dll'
             path.parent.mkdir(parents=True);path.write_bytes(b'MZrawstub')
+            video=build/f'dst-ffmpeg-{arch}/lib/provider'
+            video.mkdir(parents=True)
+            (video/'libavcodec.so.58.1').write_bytes(b'\x7fELF'+arch.encode())
+            (video/'libavcodec.so.58').symlink_to('libavcodec.so.58.1')
         return source,build
+
+    def test_missing_video_arch_refuses_export_without_mutation(self):
+        source,build=self.portable_build();archive=self.root/'export.tar.gz'
+        shutil.rmtree(build/'dst-ffmpeg-i386')
+        before=stock.tree(build)
+        with self.assertRaisesRegex(ValueError,'Missing FFmpeg test providers: i386'):
+            stock.export(source,build,archive)
+        self.assertEqual(stock.tree(build),before)
+        self.assertFalse(archive.exists())
+
+    def test_video_provider_symlink_escape_refused(self):
+        _,build=self.portable_build();outside=self.root/'outside.so';outside.write_bytes(b'\x7fELFoutside')
+        (build/'dst-ffmpeg-i386/lib/provider/escape.so').symlink_to(outside)
+        with self.assertRaisesRegex(ValueError,'escapes its build root'):
+            stock.test_runtime_inputs(build)
+
+    def test_conflicting_video_soname_refused(self):
+        _,build=self.portable_build();other=build/'dst-ffmpeg-i386/lib/other';other.mkdir()
+        (other/'libavcodec.so.58').write_bytes(b'\x7fELFdifferent')
+        with self.assertRaisesRegex(ValueError,'Conflicting FFmpeg provider basename'):
+            stock.test_runtime_inputs(build)
+
+    def test_portable_video_roundtrip_without_cold_compiler_trees(self):
+        source,build=self.portable_build();archive=self.root/'export.tar.gz'
+        with patch.object(stock,'identity',return_value={'digest':'pinned'}), patch.object(
+                stock.shutil,'disk_usage',return_value=SimpleNamespace(free=100*1024**3)):
+            stock.export(source,build,archive)
+            cold=stock.tree(build/'zluda-test-runtime')
+            for arch in ['i386','x86_64']:
+                shutil.rmtree(build/('dst-ffmpeg-'+arch))
+                video=build/'zluda-test-runtime'/arch/'video'
+                self.assertEqual((video/'libavcodec.so.58').read_bytes(),b'\x7fELF'+arch.encode())
+                self.assertFalse((video/'libavcodec.so.58').is_symlink())
+            stock.ready(source,build)
+            warm=self.root/'warm';warm.mkdir();stock.load_stock(source,warm,archive,stock.sha(archive))
+            self.assertEqual(stock.tree(warm/'zluda-test-runtime'),cold)
+            stock.ready(source,warm)
+            self.assertFalse(any(p.name.startswith('dst-ffmpeg-') for p in warm.iterdir()))
+            self.assertFalse(any('ffmpeg' in str(p) or 'avcodec' in p.name for p in (warm/'dist').rglob('*')))
+            (warm/'zluda-test-runtime/i386/video/libavcodec.so.58').write_bytes(b'tampered')
+            with self.assertRaisesRegex(ValueError,'coverage drift'):
+                stock.ready(source,warm)
 
     def test_missing_runtime_manifest_refuses_export_before_mutation(self):
         source,build=self.portable_build(); archive=self.root/'export.tar.gz'

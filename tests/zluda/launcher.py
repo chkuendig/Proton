@@ -32,7 +32,9 @@ with tempfile.TemporaryDirectory(prefix='zluda-launcher-', dir=obj) as temporary
     for arch, steam_arch in [('x86_64', 'ubuntu12_64'), ('i386', 'ubuntu12_32')]:
         video = root / 'steam' / steam_arch / 'video'
         video.mkdir(parents=True)
-        for path in (obj / ('dst-ffmpeg-' + arch)).rglob('*.so*'):
+        providers = obj / 'zluda-test-runtime' / arch / 'video'
+        assert providers.is_dir() and any(providers.iterdir()), providers
+        for path in providers.glob('*.so*'):
             if path.is_file():
                 (video / path.name).symlink_to(path.resolve())
     preloader = private / 'files/lib/wine/x86_64-unix/wine-preloader'

@@ -13,8 +13,8 @@ import subprocess
 import tarfile
 import tempfile
 
-SCHEMA = 'proton-stock-closure-1'
-ROOTS = {'dist', 'zluda-wine-sdk', 'src-wine', 'dst-wine-i386', 'dst-wine-x86_64'}
+SCHEMA = 'proton-stock-closure-2'
+ROOTS = {'dist', 'zluda-wine-sdk', 'src-wine', 'dst-wine-i386', 'dst-wine-x86_64', 'zluda-test-runtime'}
 # Candidate assembly always writes these; they are not stock install artifacts.
 ASSEMBLY = {'version', 'LICENSE'}
 LIMIT = 8 * 1024**3
@@ -188,15 +188,59 @@ def validate_runtime(build):
         raise ValueError('Missing installed runtime manifest: files/share/openxr/wineopenxr64.json')
 
 
+def test_runtime_inputs(build):
+    """Exact external Steam-video providers used by both smoke architectures."""
+    result = {}
+    for arch in ('i386', 'x86_64'):
+        root = build / ('dst-ffmpeg-' + arch)
+        providers = {}
+        for path in sorted(root.rglob('*.so*')):
+            resolved = path.resolve(strict=True)
+            if not resolved.is_relative_to(root.resolve()) or not resolved.is_file():
+                raise ValueError('FFmpeg test provider escapes its build root: ' + str(path))
+            with resolved.open('rb') as stream:
+                if stream.read(4) != b'\x7fELF':
+                    raise ValueError('Non-ELF FFmpeg test provider: ' + str(path))
+            if path.name in providers and sha(providers[path.name]) != sha(resolved):
+                raise ValueError('Conflicting FFmpeg provider basename: ' + path.name)
+            providers[path.name] = resolved
+        if not providers:
+            raise ValueError('Missing FFmpeg test providers: ' + arch)
+        result[arch] = providers
+    return result
+
+
+def validate_test_runtime(build):
+    root = build / 'zluda-test-runtime'
+    if root.is_symlink() or not root.is_dir() or {p.name for p in root.iterdir()} != {'i386', 'x86_64'}:
+        raise ValueError('Incomplete portable test-runtime architectures')
+    for arch in ('i386', 'x86_64'):
+        directory = root / arch
+        video = directory / 'video'
+        if directory.is_symlink() or not directory.is_dir() or {p.name for p in directory.iterdir()} != {'video'} or video.is_symlink() or not video.is_dir():
+            raise ValueError('Invalid portable test-runtime directory: ' + arch)
+        files = list(video.iterdir())
+        if not files:
+            raise ValueError('Empty portable test runtime: ' + arch)
+        for path in files:
+            if path.is_symlink() or not path.is_file() or '.so' not in path.name:
+                raise ValueError('Invalid portable test provider: ' + str(path))
+            with path.open('rb') as stream:
+                if stream.read(4) != b'\x7fELF':
+                    raise ValueError('Non-ELF portable test provider: ' + str(path))
+
+
 def export(source, build, output):
     if output.exists() or not (build / 'dist').is_dir():
         raise ValueError('Export output exists or stock install is absent')
     validate_runtime(build)
+    providers = test_runtime_inputs(build)
     ident = identity(source, build)
     # Extra installed-tree/SDK staging plus compressed export must fit without
     # relying on the runner's original admission floor remaining free.
     estimate = int(command('du', '-sLb', str(build / 'dist')).split()[0])
     estimate += int(command('du', '-sLb', str(build / 'zluda-wine-sdk')).split()[0])
+    estimate += sum(path.stat().st_size for files in providers.values() for path in files.values())
     if shutil.disk_usage(build.parent).free < 2 * estimate + 2 * 1024**3:
         raise ValueError('Insufficient room for stock staging/export')
     contract = json.loads((source / 'make/zluda-wine-abi.json').read_text())
@@ -217,6 +261,12 @@ def export(source, build, output):
             dest = stage / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(build / name, dest)
+        for arch, files in providers.items():
+            video = stage / 'zluda-test-runtime' / arch / 'video'
+            video.mkdir(parents=True)
+            for name, path in files.items():
+                shutil.copy2(path, video / name)
+        validate_test_runtime(stage)
         payload = tree(stage, strict_links=True)
         record = {'schema': SCHEMA, 'identity': ident, 'files': payload}
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -231,7 +281,8 @@ def export(source, build, output):
         # Cold compilation is finished: no extra headers or raw install files
         # from its full compiler trees may survive into the imported interface.
         for name in sorted(ROOTS - {'dist'}):
-            shutil.rmtree(build / name)
+            if (build / name).exists():
+                shutil.rmtree(build / name)
             shutil.copytree(stage / name, build / name, symlinks=True)
         write(build / 'STOCK-READY.json', record)
         write(build / 'STOCK-EXPORT.json', {'archive_sha256': sha(output), 'bytes': output.stat().st_size,
@@ -293,6 +344,7 @@ def load_stock(source, build, archive, expected):
         if record['identity'] != identity(source, build):
             raise ValueError('Exact stock input identity mismatch')
         validate_runtime(stage)
+        validate_test_runtime(stage)
         validate_sdk(source, stage)
         for name in ROOTS:
             if not (stage / name).is_dir():
@@ -319,6 +371,7 @@ def ready(source, build):
             raise ValueError('Imported SDK/source/raw stub bytes/type/mode/coverage drift: ' + name)
     validate_sdk(source, build)
     validate_runtime(build)
+    validate_test_runtime(build)
 
 
 def qualification(build, output):
