@@ -102,6 +102,10 @@ Tested on a Steam Deck. **WIP** marks titles that do not run with GPU PhysX yet.
   answered.
 - Title setup: WoW64 mode, plus `d3dx9`, `d3dcompiler_43` and `physx` installed
   on first launch.
+- On Steam Deck, `AMD_CU_MASK=0x3f %command%` is an optional Steam launch
+  setting that limits RADV to six compute units. In the uncapped built-in
+  benchmark with PhysX High, average FPS rose from 71.25 to 82.63 on Valve
+  Proton `11.0-2e` with the `zluda-wine` bridge.
 
 **Batman: Arkham City**
 - Needs the PhysX System Software. The launcher has mouse-only buttons.
